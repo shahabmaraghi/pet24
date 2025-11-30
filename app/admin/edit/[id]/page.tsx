@@ -2,7 +2,7 @@
 
 import Image, { ImageLoader } from 'next/image'
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 
 interface Post {
@@ -15,8 +15,10 @@ interface Post {
   updatedAt: string
 }
 
-export default function EditPostPage({ params }: { params: { id: string } }) {
+export default function EditPostPage() {
   const router = useRouter()
+  const params = useParams<{ id: string }>()
+  const postId = params?.id
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [image, setImage] = useState('')
@@ -44,8 +46,11 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
   }, [router])
 
   const fetchPost = useCallback(async () => {
+    if (!postId) {
+      return
+    }
     try {
-      const response = await fetch(`/api/posts/${params.id}`)
+      const response = await fetch(`/api/posts/${postId}`)
       if (response.ok) {
         const post: Post = await response.json()
         setTitle(post.title)
@@ -58,12 +63,13 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
     } finally {
       setLoading(false)
     }
-  }, [params.id])
+  }, [postId])
 
   useEffect(() => {
+    if (!postId) return
     checkAuth()
     fetchPost()
-  }, [checkAuth, fetchPost])
+  }, [checkAuth, fetchPost, postId])
 
   useEffect(() => {
     setPreviewError(false)
@@ -74,7 +80,10 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
     setSaving(true)
     
     try {
-      const response = await fetch(`/api/posts/${params.id}`, {
+      if (!postId) {
+        throw new Error('شناسه پست یافت نشد')
+      }
+      const response = await fetch(`/api/posts/${postId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -96,7 +105,7 @@ export default function EditPostPage({ params }: { params: { id: string } }) {
     }
   }
 
-  if (loading || !user) {
+  if (!postId || loading || !user) {
     return <div className="text-center py-12">در حال بارگذاری...</div>
   }
 

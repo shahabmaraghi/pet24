@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useDropzone, FileRejection } from 'react-dropzone'
 import { useRouter } from 'next/navigation'
-import { productCategories, ProductCategoryId } from '@/lib/products'
+import { productCategories, type ProductCategoryId } from '@/lib/productCategories'
 import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_SIZE_BYTES, fileToBase64, isDataUrl } from '@/lib/images'
 
 interface Product {

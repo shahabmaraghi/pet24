@@ -2,7 +2,11 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { deleteSlide, getSlideById, updateSlide, SlideInput } from '@/lib/slides'
 
-export async function GET(_: Request, { params }: { params: { id: string } }) {
+type RouteParams = { id: string }
+type RouteContext = { params: Promise<RouteParams> }
+
+export async function GET(_: Request, context: RouteContext) {
+  const params = await context.params
   const slide = getSlideById(params.id)
   if (!slide) {
     return NextResponse.json({ error: 'اسلاید یافت نشد' }, { status: 404 })
@@ -10,7 +14,8 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   return NextResponse.json(slide)
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, context: RouteContext) {
+  const params = await context.params
   const session = await getSession()
 
   if (!session || session.role !== 'admin') {
@@ -47,7 +52,8 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(_: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_: Request, context: RouteContext) {
+  const params = await context.params
   const session = await getSession()
 
   if (!session || session.role !== 'admin') {

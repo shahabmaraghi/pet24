@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getPostById, updatePost, deletePost } from '@/lib/posts'
 
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+type RouteParams = { id: string }
+type RouteContext = { params: Promise<RouteParams> }
+
+export async function GET(request: Request, context: RouteContext) {
+  const params = await context.params
   const post = getPostById(params.id)
   
   if (!post) {
@@ -17,10 +18,8 @@ export async function GET(
   return NextResponse.json(post)
 }
 
-export async function PUT(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: Request, context: RouteContext) {
+  const params = await context.params
   try {
     const body = await request.json()
     const { title, content, published, image } = body
@@ -50,10 +49,8 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: Request, context: RouteContext) {
+  const params = await context.params
   const success = deletePost(params.id)
   
   if (!success) {

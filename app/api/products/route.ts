@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server'
-import {
-  createProduct,
-  getAllProducts,
-  productCategories,
-  ProductCategoryId,
-} from '@/lib/products'
+import { createProduct, getAllProducts } from '@/lib/products'
+import { productCategories, type ProductCategoryId } from '@/lib/productCategories'
 import { ensureProductImages } from '@/lib/externalMedia'
 import { getSession } from '@/lib/auth'
 

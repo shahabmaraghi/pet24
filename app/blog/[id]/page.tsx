@@ -19,8 +19,11 @@ function getReadingTime(content: string) {
   return minutes
 }
 
-export default async function BlogPostPage({ params }: { params: { id: string } }) {
-  const post = getPostById(params.id)
+type RouteParams = Promise<{ id: string }>
+
+export default async function BlogPostPage({ params }: { params: RouteParams }) {
+  const { id } = await params
+  const post = getPostById(id)
   const allPosts = getPublishedPosts()
 
   if (!post || !post.published) {

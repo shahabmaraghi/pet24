@@ -3,10 +3,11 @@ import { getSession } from '@/lib/auth'
 import { deleteProduct, getProductById, updateProduct } from '@/lib/products'
 import { ensureProductImages } from '@/lib/externalMedia'
 
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+type RouteParams = { id: string }
+type RouteContext = { params: Promise<RouteParams> }
+
+export async function GET(request: Request, context: RouteContext) {
+  const params = await context.params
   const product = getProductById(params.id)
 
   if (!product) {
@@ -18,10 +19,8 @@ export async function GET(
   return NextResponse.json(productWithImage)
 }
 
-export async function PUT(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: Request, context: RouteContext) {
+  const params = await context.params
   const session = await getSession()
   if (!session || session.role !== 'admin') {
     return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
@@ -83,10 +82,8 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: Request, context: RouteContext) {
+  const params = await context.params
   const session = await getSession()
   if (!session || session.role !== 'admin') {
     return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
