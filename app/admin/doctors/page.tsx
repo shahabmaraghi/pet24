@@ -4,7 +4,7 @@ import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } fro
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useDropzone, FileRejection } from 'react-dropzone'
-import { iranlocations } from '../../../data/iran-locations'
+import { iranlocations } from '@/data/iran-locations'
 import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_SIZE_BYTES, fileToBase64, isDataUrl } from '@/lib/images'
 import Image from 'next/image'
 

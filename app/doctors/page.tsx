@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
 import { isDataUrl } from '@/lib/images'
-import { iranlocations } from '../../data/iran-locations'
+import { iranlocations } from '@/data/iran-locations'
 
 interface Doctor {
   id: string
