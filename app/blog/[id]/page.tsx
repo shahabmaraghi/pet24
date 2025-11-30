@@ -23,8 +23,8 @@ type RouteParams = Promise<{ id: string }>
 
 export default async function BlogPostPage({ params }: { params: RouteParams }) {
   const { id } = await params
-  const post = getPostById(id)
-  const allPosts = getPublishedPosts()
+  const post = await getPostById(id)
+  const allPosts = await getPublishedPosts()
 
   if (!post || !post.published) {
     notFound()

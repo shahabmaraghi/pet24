@@ -4,7 +4,7 @@ import { getAllUsers } from '@/lib/users'
 // Debug endpoint to list all users (remove in production or add admin auth)
 export async function GET() {
   try {
-    const allUsers = getAllUsers()
+    const allUsers = await getAllUsers()
     return NextResponse.json({
       count: allUsers.length,
       users: allUsers,

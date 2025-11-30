@@ -8,7 +8,7 @@ type RouteContext = { params: Promise<RouteParams> }
 
 export async function GET(request: Request, context: RouteContext) {
   const params = await context.params
-  const doctor = getDoctorById(params.id)
+  const doctor = await getDoctorById(params.id)
 
   if (!doctor) {
     return NextResponse.json({ error: 'پزشک یافت نشد' }, { status: 404 })
@@ -53,7 +53,7 @@ export async function PUT(request: Request, context: RouteContext) {
       )
     }
 
-    const doctor = updateDoctor(params.id, {
+    const doctor = await updateDoctor(params.id, {
       ...body,
       description: body.description?.trim() || undefined,
       mapUrl: body.mapUrl?.trim() || undefined,
@@ -85,7 +85,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
   }
 
-  const success = deleteDoctor(params.id)
+  const success = await deleteDoctor(params.id)
 
   if (!success) {
     return NextResponse.json({ error: 'پزشک یافت نشد' }, { status: 404 })

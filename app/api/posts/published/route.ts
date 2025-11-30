@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getPublishedPosts } from '@/lib/posts'
 
 export async function GET() {
-  const posts = getPublishedPosts()
+  const posts = await getPublishedPosts()
   return NextResponse.json(posts)
 }
 

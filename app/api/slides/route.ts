@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth'
 import { createSlide, getAllSlides, SlideInput } from '@/lib/slides'
 
 export async function GET() {
-  const slides = getAllSlides()
+  const slides = await getAllSlides()
   return NextResponse.json(slides)
 }
 
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
         ? Number(body.order)
         : undefined
 
-    const slide = createSlide({
+    const slide = await createSlide({
       title: body.title.trim(),
       description: body.description.trim(),
       accent: body.accent.trim(),

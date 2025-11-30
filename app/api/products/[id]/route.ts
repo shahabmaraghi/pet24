@@ -8,7 +8,7 @@ type RouteContext = { params: Promise<RouteParams> }
 
 export async function GET(request: Request, context: RouteContext) {
   const params = await context.params
-  const product = getProductById(params.id)
+  const product = await getProductById(params.id)
 
   if (!product) {
     return NextResponse.json({ error: 'محصول یافت نشد' }, { status: 404 })
@@ -55,7 +55,7 @@ export async function PUT(request: Request, context: RouteContext) {
           ? body.highlights
           : undefined
 
-    const updated = updateProduct(params.id, {
+    const updated = await updateProduct(params.id, {
       ...body,
       price,
       stock,
@@ -89,7 +89,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
   }
 
-  const success = deleteProduct(params.id)
+  const success = await deleteProduct(params.id)
 
   if (!success) {
     return NextResponse.json({ error: 'محصول یافت نشد' }, { status: 404 })

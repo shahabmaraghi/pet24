@@ -24,7 +24,7 @@ function truncateText(text: string, maxLength: number = 120) {
 }
 
 export default async function BlogPage() {
-  const posts = getPublishedPosts()
+  const posts = await getPublishedPosts()
   const featuredPost = posts[0]
   const latestPosts = posts.slice(1)
 

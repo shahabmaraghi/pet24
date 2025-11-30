@@ -6,7 +6,7 @@ type RouteContext = { params: Promise<RouteParams> }
 
 export async function GET(request: Request, context: RouteContext) {
   const params = await context.params
-  const post = getPostById(params.id)
+  const post = await getPostById(params.id)
   
   if (!post) {
     return NextResponse.json(
@@ -31,7 +31,7 @@ export async function PUT(request: Request, context: RouteContext) {
       )
     }
     
-    const post = updatePost(params.id, title, content, published || false, image)
+    const post = await updatePost(params.id, title, content, published || false, image)
     
     if (!post) {
       return NextResponse.json(
@@ -51,7 +51,7 @@ export async function PUT(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
   const params = await context.params
-  const success = deletePost(params.id)
+  const success = await deletePost(params.id)
   
   if (!success) {
     return NextResponse.json(

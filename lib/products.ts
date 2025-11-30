@@ -1,4 +1,6 @@
+import { type Collection, WithId } from 'mongodb'
 import { loadJsonFile, saveJsonFile } from './storage'
+import { getDb, mongoEnabled } from './mongodb'
 import {
   productCategories,
   type ProductCategory,
@@ -31,7 +33,7 @@ type ProductFilter = {
   search?: string
 }
 
-const PRODUCTS_FILE = 'products.json'
+type ProductDocument = Omit<Product, 'id'> & { _id: string }
 
 const defaultProducts: Product[] = [
   {
@@ -135,19 +137,20 @@ const defaultProducts: Product[] = [
   },
 ]
 
-let products: Product[] = loadJsonFile<Product[]>(PRODUCTS_FILE, defaultProducts)
+const PRODUCTS_FILE = 'products.json'
+let productCache: Product[] = loadJsonFile<Product[]>(PRODUCTS_FILE, defaultProducts)
 
-function refreshProducts() {
-  products = loadJsonFile<Product[]>(PRODUCTS_FILE, defaultProducts)
+function refreshProductsFromJson() {
+  productCache = loadJsonFile<Product[]>(PRODUCTS_FILE, defaultProducts)
 }
 
-function persistProducts() {
-  saveJsonFile(PRODUCTS_FILE, products)
+function persistProductsToJson() {
+  saveJsonFile(PRODUCTS_FILE, productCache)
 }
 
-export function getAllProducts(filter?: ProductFilter): Product[] {
-  refreshProducts()
-  let result = [...products]
+function getAllProductsFromJson(filter?: ProductFilter): Product[] {
+  refreshProductsFromJson()
+  let result = [...productCache]
 
   if (filter?.categoryId) {
     result = result.filter((product) => product.categoryId === filter.categoryId)
@@ -168,13 +171,13 @@ export function getAllProducts(filter?: ProductFilter): Product[] {
   )
 }
 
-export function getProductById(id: string): Product | undefined {
-  refreshProducts()
-  return products.find((product) => product.id === id)
+function getProductByIdFromJson(id: string): Product | undefined {
+  refreshProductsFromJson()
+  return productCache.find((product) => product.id === id)
 }
 
-export function createProduct(payload: ProductInput): Product {
-  refreshProducts()
+function createProductInJson(payload: ProductInput): Product {
+  refreshProductsFromJson()
   const now = new Date().toISOString()
   const newProduct: Product = {
     id: `prod-${Date.now()}`,
@@ -182,38 +185,188 @@ export function createProduct(payload: ProductInput): Product {
     createdAt: now,
     updatedAt: now,
   }
-  products.push(newProduct)
-  persistProducts()
+  productCache.push(newProduct)
+  persistProductsToJson()
   return newProduct
 }
 
-export function updateProduct(id: string, payload: Partial<ProductInput>): Product | null {
-  refreshProducts()
-  const index = products.findIndex((product) => product.id === id)
+function updateProductInJson(id: string, payload: Partial<ProductInput>): Product | null {
+  refreshProductsFromJson()
+  const index = productCache.findIndex((product) => product.id === id)
   if (index === -1) {
     return null
   }
 
   const updatedProduct: Product = {
-    ...products[index],
+    ...productCache[index],
     ...payload,
     updatedAt: new Date().toISOString(),
   }
 
-  products[index] = updatedProduct
-  persistProducts()
+  productCache[index] = updatedProduct
+  persistProductsToJson()
   return updatedProduct
 }
 
-export function deleteProduct(id: string): boolean {
-  refreshProducts()
-  const index = products.findIndex((product) => product.id === id)
+function deleteProductInJson(id: string): boolean {
+  refreshProductsFromJson()
+  const index = productCache.findIndex((product) => product.id === id)
   if (index === -1) {
     return false
   }
 
-  products.splice(index, 1)
-  persistProducts()
+  productCache.splice(index, 1)
+  persistProductsToJson()
   return true
+}
+
+let productsCollectionPromise: Promise<Collection<ProductDocument>> | null = null
+
+async function getProductsCollection() {
+  if (!productsCollectionPromise) {
+    productsCollectionPromise = (async () => {
+      const db = await getDb()
+      const collection = db.collection<ProductDocument>('products')
+      const count = await collection.estimatedDocumentCount()
+      if (count === 0) {
+        await collection.insertMany(
+          defaultProducts.map(({ id, ...product }) => ({
+            _id: id,
+            ...product,
+          }))
+        )
+      }
+      return collection
+    })()
+  }
+
+  return productsCollectionPromise
+}
+
+function mapProduct(doc: WithId<ProductDocument>): Product {
+  return {
+    id: doc._id,
+    name: doc.name,
+    categoryId: doc.categoryId,
+    description: doc.description,
+    image: doc.image,
+    price: doc.price,
+    stock: doc.stock,
+    brand: doc.brand,
+    highlights: doc.highlights,
+    weight: doc.weight,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  }
+}
+
+export async function getAllProducts(filter?: ProductFilter): Promise<Product[]> {
+  if (!mongoEnabled) {
+    return getAllProductsFromJson(filter)
+  }
+
+  try {
+    const collection = await getProductsCollection()
+    const query: Record<string, unknown> = {}
+
+    if (filter?.categoryId) {
+      query.categoryId = filter.categoryId
+    }
+
+    if (filter?.search) {
+      const normalized = filter.search.trim().toLowerCase()
+      query.$or = [
+        { name: { $regex: normalized, $options: 'i' } },
+        { description: { $regex: normalized, $options: 'i' } },
+        { brand: { $regex: normalized, $options: 'i' } },
+      ]
+    }
+
+    const docs = await collection.find(query).sort({ createdAt: -1 }).toArray()
+    return docs.map(mapProduct)
+  } catch (error) {
+    console.error('MongoDB error fetching products, using JSON fallback:', error)
+    return getAllProductsFromJson(filter)
+  }
+}
+
+export async function getProductById(id: string): Promise<Product | undefined> {
+  if (!mongoEnabled) {
+    return getProductByIdFromJson(id)
+  }
+
+  try {
+    const collection = await getProductsCollection()
+    const doc = await collection.findOne({ _id: id })
+    return doc ? mapProduct(doc) : undefined
+  } catch (error) {
+    console.error('MongoDB error fetching product by id, using JSON fallback:', error)
+    return getProductByIdFromJson(id)
+  }
+}
+
+export async function createProduct(payload: ProductInput): Promise<Product> {
+  if (!mongoEnabled) {
+    return createProductInJson(payload)
+  }
+
+  try {
+    const collection = await getProductsCollection()
+    const now = new Date().toISOString()
+    const id = `prod-${Date.now()}`
+    const doc: ProductDocument = {
+      _id: id,
+      ...payload,
+      createdAt: now,
+      updatedAt: now,
+    }
+    await collection.insertOne(doc)
+    return mapProduct(doc)
+  } catch (error) {
+    console.error('MongoDB error creating product, using JSON fallback:', error)
+    return createProductInJson(payload)
+  }
+}
+
+export async function updateProduct(
+  id: string,
+  payload: Partial<ProductInput>
+): Promise<Product | null> {
+  if (!mongoEnabled) {
+    return updateProductInJson(id, payload)
+  }
+
+  try {
+    const collection = await getProductsCollection()
+    const sanitizedPayload = Object.fromEntries(
+      Object.entries(payload).filter(([, value]) => value !== undefined)
+    ) as Partial<ProductInput>
+
+    const result = await collection.findOneAndUpdate(
+      { _id: id },
+      { $set: { ...sanitizedPayload, updatedAt: new Date().toISOString() } },
+      { returnDocument: 'after' }
+    )
+
+    return result.value ? mapProduct(result.value) : null
+  } catch (error) {
+    console.error('MongoDB error updating product, using JSON fallback:', error)
+    return updateProductInJson(id, payload)
+  }
+}
+
+export async function deleteProduct(id: string): Promise<boolean> {
+  if (!mongoEnabled) {
+    return deleteProductInJson(id)
+  }
+
+  try {
+    const collection = await getProductsCollection()
+    const result = await collection.deleteOne({ _id: id })
+    return result.deletedCount === 1
+  } catch (error) {
+    console.error('MongoDB error deleting product, using JSON fallback:', error)
+    return deleteProductInJson(id)
+  }
 }
 

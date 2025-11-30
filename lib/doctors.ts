@@ -1,4 +1,6 @@
+import { type Collection, WithId } from 'mongodb'
 import { loadJsonFile, saveJsonFile } from './storage'
+import { getDb, mongoEnabled } from './mongodb'
 
 export interface DoctorInput {
   name: string
@@ -25,7 +27,7 @@ type DoctorFilter = {
   city?: string
 }
 
-const DOCTORS_FILE = 'doctors.json'
+type DoctorDocument = Omit<Doctor, 'id'> & { _id: string }
 
 const defaultDoctors: Doctor[] = [
   {
@@ -174,19 +176,20 @@ const defaultDoctors: Doctor[] = [
   },
 ]
 
-let doctors: Doctor[] = loadJsonFile<Doctor[]>(DOCTORS_FILE, defaultDoctors)
+const DOCTORS_FILE = 'doctors.json'
+let doctorCache: Doctor[] = loadJsonFile<Doctor[]>(DOCTORS_FILE, defaultDoctors)
 
-function refreshDoctors() {
-  doctors = loadJsonFile<Doctor[]>(DOCTORS_FILE, defaultDoctors)
+function refreshDoctorsFromJson() {
+  doctorCache = loadJsonFile<Doctor[]>(DOCTORS_FILE, defaultDoctors)
 }
 
-function persistDoctors() {
-  saveJsonFile(DOCTORS_FILE, doctors)
+function persistDoctorsToJson() {
+  saveJsonFile(DOCTORS_FILE, doctorCache)
 }
 
-export function getAllDoctors(filter?: DoctorFilter): Doctor[] {
-  refreshDoctors()
-  let result = [...doctors]
+function getAllDoctorsFromJson(filter?: DoctorFilter): Doctor[] {
+  refreshDoctorsFromJson()
+  let result = [...doctorCache]
 
   if (filter?.province) {
     result = result.filter((doctor) => doctor.province === filter.province)
@@ -201,13 +204,13 @@ export function getAllDoctors(filter?: DoctorFilter): Doctor[] {
   )
 }
 
-export function getDoctorById(id: string): Doctor | undefined {
-  refreshDoctors()
-  return doctors.find((doctor) => doctor.id === id)
+function getDoctorByIdFromJson(id: string): Doctor | undefined {
+  refreshDoctorsFromJson()
+  return doctorCache.find((doctor) => doctor.id === id)
 }
 
-export function createDoctor(payload: DoctorInput): Doctor {
-  refreshDoctors()
+function createDoctorInJson(payload: DoctorInput): Doctor {
+  refreshDoctorsFromJson()
   const now = new Date().toISOString()
   const newDoctor: Doctor = {
     id: `doc-${Date.now()}`,
@@ -216,38 +219,189 @@ export function createDoctor(payload: DoctorInput): Doctor {
     updatedAt: now,
   }
 
-  doctors.push(newDoctor)
-  persistDoctors()
+  doctorCache.push(newDoctor)
+  persistDoctorsToJson()
   return newDoctor
 }
 
-export function updateDoctor(id: string, payload: Partial<DoctorInput>): Doctor | null {
-  refreshDoctors()
-  const index = doctors.findIndex((doctor) => doctor.id === id)
+function updateDoctorInJson(id: string, payload: Partial<DoctorInput>): Doctor | null {
+  refreshDoctorsFromJson()
+  const index = doctorCache.findIndex((doctor) => doctor.id === id)
   if (index === -1) {
     return null
   }
 
   const updatedDoctor: Doctor = {
-    ...doctors[index],
+    ...doctorCache[index],
     ...payload,
     updatedAt: new Date().toISOString(),
   }
 
-  doctors[index] = updatedDoctor
-  persistDoctors()
+  doctorCache[index] = updatedDoctor
+  persistDoctorsToJson()
   return updatedDoctor
 }
 
-export function deleteDoctor(id: string): boolean {
-  refreshDoctors()
-  const index = doctors.findIndex((doctor) => doctor.id === id)
+function deleteDoctorInJson(id: string): boolean {
+  refreshDoctorsFromJson()
+  const index = doctorCache.findIndex((doctor) => doctor.id === id)
   if (index === -1) {
     return false
   }
 
-  doctors.splice(index, 1)
-  persistDoctors()
+  doctorCache.splice(index, 1)
+  persistDoctorsToJson()
   return true
+}
+
+let doctorsCollectionPromise: Promise<Collection<DoctorDocument>> | null = null
+
+async function getDoctorsCollection() {
+  if (!doctorsCollectionPromise) {
+    doctorsCollectionPromise = (async () => {
+      const db = await getDb()
+      const collection = db.collection<DoctorDocument>('doctors')
+      const count = await collection.estimatedDocumentCount()
+      if (count === 0) {
+        await collection.insertMany(
+          defaultDoctors.map(({ id, ...doctor }) => ({
+            _id: id,
+            ...doctor,
+          }))
+        )
+      }
+      return collection
+    })()
+  }
+  return doctorsCollectionPromise
+}
+
+function mapDoctor(doc: WithId<DoctorDocument>): Doctor {
+  return {
+    id: doc._id,
+    name: doc.name,
+    specialty: doc.specialty,
+    phone: doc.phone,
+    address: doc.address,
+    province: doc.province,
+    city: doc.city,
+    description: doc.description,
+    mapUrl: doc.mapUrl,
+    latitude: doc.latitude,
+    longitude: doc.longitude,
+    photo: doc.photo,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  }
+}
+
+export async function getAllDoctors(filter?: DoctorFilter): Promise<Doctor[]> {
+  if (!mongoEnabled) {
+    return getAllDoctorsFromJson(filter)
+  }
+
+  try {
+    const collection = await getDoctorsCollection()
+    const query: Record<string, string> = {}
+
+    if (filter?.province) {
+      query.province = filter.province
+    }
+
+    if (filter?.city) {
+      query.city = filter.city
+    }
+
+    const docs = await collection.find(query).sort({ createdAt: -1 }).toArray()
+    return docs.map(mapDoctor)
+  } catch (error) {
+    console.error('MongoDB error fetching doctors, using JSON fallback:', error)
+    return getAllDoctorsFromJson(filter)
+  }
+}
+
+export async function getDoctorById(id: string): Promise<Doctor | undefined> {
+  if (!mongoEnabled) {
+    return getDoctorByIdFromJson(id)
+  }
+
+  try {
+    const collection = await getDoctorsCollection()
+    const doc = await collection.findOne({ _id: id })
+    return doc ? mapDoctor(doc) : undefined
+  } catch (error) {
+    console.error('MongoDB error fetching doctor by id, using JSON fallback:', error)
+    return getDoctorByIdFromJson(id)
+  }
+}
+
+export async function createDoctor(payload: DoctorInput): Promise<Doctor> {
+  if (!mongoEnabled) {
+    return createDoctorInJson(payload)
+  }
+
+  try {
+    const collection = await getDoctorsCollection()
+    const now = new Date().toISOString()
+    const id = `doc-${Date.now()}`
+    const doc: DoctorDocument = {
+      _id: id,
+      ...payload,
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    await collection.insertOne(doc)
+    return mapDoctor(doc)
+  } catch (error) {
+    console.error('MongoDB error creating doctor, using JSON fallback:', error)
+    return createDoctorInJson(payload)
+  }
+}
+
+export async function updateDoctor(
+  id: string,
+  payload: Partial<DoctorInput>
+): Promise<Doctor | null> {
+  if (!mongoEnabled) {
+    return updateDoctorInJson(id, payload)
+  }
+
+  try {
+    const collection = await getDoctorsCollection()
+    const sanitizedPayload = Object.fromEntries(
+      Object.entries(payload).filter(([, value]) => value !== undefined)
+    ) as Partial<DoctorInput>
+    const update = {
+      ...sanitizedPayload,
+      updatedAt: new Date().toISOString(),
+    }
+
+    const result = await collection.findOneAndUpdate(
+      { _id: id },
+      { $set: update },
+      { returnDocument: 'after' }
+    )
+
+    return result.value ? mapDoctor(result.value) : null
+  } catch (error) {
+    console.error('MongoDB error updating doctor, using JSON fallback:', error)
+    return updateDoctorInJson(id, payload)
+  }
+}
+
+export async function deleteDoctor(id: string): Promise<boolean> {
+  if (!mongoEnabled) {
+    return deleteDoctorInJson(id)
+  }
+
+  try {
+    const collection = await getDoctorsCollection()
+    const result = await collection.deleteOne({ _id: id })
+    return result.deletedCount === 1
+  } catch (error) {
+    console.error('MongoDB error deleting doctor, using JSON fallback:', error)
+    return deleteDoctorInJson(id)
+  }
 }
 

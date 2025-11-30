@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const search = url.searchParams.get('search') || undefined
 
   const products = await ensureProductImages(
-    getAllProducts({
+    await getAllProducts({
       categoryId: categoryParam || undefined,
       search,
     })
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
             .filter(Boolean)
         : undefined
 
-    const product = createProduct({
+    const product = await createProduct({
       name: body.name.trim(),
       categoryId: body.categoryId.trim(),
       description: body.description.trim(),

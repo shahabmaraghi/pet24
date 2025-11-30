@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const doctorId = url.searchParams.get('doctorId') || undefined
 
-  const reservations = getReservations({ doctorId })
+  const reservations = await getReservations({ doctorId })
   return NextResponse.json(reservations)
 }
 
@@ -29,13 +29,13 @@ export async function POST(request: Request) {
       )
     }
 
-    const doctor = getDoctorById(doctorId)
+    const doctor = await getDoctorById(doctorId)
 
     if (!doctor) {
       return NextResponse.json({ error: 'پزشک یافت نشد' }, { status: 404 })
     }
 
-    const reservation = createReservation({
+    const reservation = await createReservation({
       doctorId,
       doctorName: doctor.name,
       patientName: patientName.trim(),

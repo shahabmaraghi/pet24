@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   const city = url.searchParams.get('city') || undefined
 
   const doctors = await ensureDoctorPhotos(
-    getAllDoctors({
+    await getAllDoctors({
       province,
       city,
     })
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const doctor = createDoctor({
+    const doctor = await createDoctor({
       name: body.name.trim(),
       specialty: body.specialty.trim(),
       phone: body.phone.trim(),

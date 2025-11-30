@@ -7,7 +7,7 @@ type RouteContext = { params: Promise<RouteParams> }
 
 export async function GET(_: Request, context: RouteContext) {
   const params = await context.params
-  const slide = getSlideById(params.id)
+  const slide = await getSlideById(params.id)
   if (!slide) {
     return NextResponse.json({ error: 'اسلاید یافت نشد' }, { status: 404 })
   }
@@ -30,7 +30,7 @@ export async function PUT(request: Request, context: RouteContext) {
         ? Number(body.order)
         : undefined
 
-    const updated = updateSlide(params.id, {
+    const updated = await updateSlide(params.id, {
       ...body,
       title: body.title?.trim(),
       description: body.description?.trim(),
@@ -60,7 +60,7 @@ export async function DELETE(_: Request, context: RouteContext) {
     return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
   }
 
-  const success = deleteSlide(params.id)
+  const success = await deleteSlide(params.id)
 
   if (!success) {
     return NextResponse.json({ error: 'اسلاید یافت نشد' }, { status: 404 })

@@ -2,89 +2,187 @@
 // In production, you would use a real database like PostgreSQL, MongoDB, etc.
 
 import bcrypt from 'bcryptjs'
-import fs from 'fs'
-import path from 'path'
+import { type Collection, WithId } from 'mongodb'
+import { loadJsonFile, saveJsonFile } from './storage'
+import { getDb, mongoEnabled } from './mongodb'
 
 export interface User {
-  id: string;
-  email: string;
-  name: string;
-  password: string; // hashed
-  role: 'user' | 'admin';
-  createdAt: string;
+  id: string
+  email: string
+  name: string
+  password: string // hashed
+  role: 'user' | 'admin'
+  createdAt: string
 }
 
-const USERS_FILE = path.join(process.cwd(), 'data', 'users.json')
+type UserDocument = Omit<User, 'id'> & { _id: string }
 
-// Ensure data directory exists
-function ensureDataDir() {
-  const dataDir = path.dirname(USERS_FILE)
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true })
-  }
+const defaultUsers: User[] = [
+  {
+    id: 'admin-default',
+    email: 'admin@example.com'.toLowerCase().trim(),
+    name: 'مدیر سیستم',
+    password: bcrypt.hashSync('admin123', 10),
+    role: 'admin',
+    createdAt: new Date().toISOString(),
+  },
+]
+
+const USERS_FILE = 'users.json'
+let usersCache: User[] = loadJsonFile<User[]>(USERS_FILE, defaultUsers)
+
+function refreshUsersFromJson() {
+  usersCache = loadJsonFile<User[]>(USERS_FILE, defaultUsers)
 }
 
-// Load users from file
-function loadUsers(): User[] {
-  ensureDataDir()
-  if (!fs.existsSync(USERS_FILE)) {
-    // Create default admin user if file doesn't exist
-    const defaultUsers: User[] = [
-      {
-        id: "1",
-        email: "admin@example.com".toLowerCase().trim(),
-        name: "مدیر سیستم",
-        password: bcrypt.hashSync("admin123", 10),
-        role: "admin",
-        createdAt: new Date().toISOString(),
-      },
-    ]
-    saveUsers(defaultUsers)
-    return defaultUsers
-  }
-
-  try {
-    const data = fs.readFileSync(USERS_FILE, 'utf-8')
-    return JSON.parse(data)
-  } catch (error) {
-    console.error('Error loading users:', error)
-    return []
-  }
+function persistUsersToJson() {
+  saveJsonFile(USERS_FILE, usersCache)
 }
 
-// Save users to file
-function saveUsers(users: User[]) {
-  ensureDataDir()
-  try {
-    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8')
-  } catch (error) {
-    console.error('Error saving users:', error)
-  }
+function getUserByEmailFromJson(email: string): User | undefined {
+  refreshUsersFromJson()
+  const normalizedEmail = email.toLowerCase().trim()
+  return usersCache.find((user) => user.email.toLowerCase().trim() === normalizedEmail)
 }
 
-// Initialize users array
-let users: User[] = loadUsers()
+function getUserByIdFromJson(id: string): User | undefined {
+  refreshUsersFromJson()
+  return usersCache.find((user) => user.id === id)
+}
+
+function getAllUsersFromJson(): User[] {
+  refreshUsersFromJson()
+  return usersCache.map((user) => ({
+    ...user,
+    password: '***hidden***',
+  }))
+}
+
+async function createUserInJson(
+  email: string,
+  name: string,
+  password: string,
+  role: 'user' | 'admin'
+): Promise<User> {
+  refreshUsersFromJson()
+  const normalizedEmail = email.toLowerCase().trim()
+  if (getUserByEmailFromJson(normalizedEmail)) {
+    throw new Error('کاربری با این ایمیل قبلاً ثبت نام کرده است')
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10)
+  const now = new Date().toISOString()
+  const newUser: User = {
+    id: `user-${Date.now()}`,
+    email: normalizedEmail,
+    name: name.trim(),
+    password: hashedPassword,
+    role,
+    createdAt: now,
+  }
+
+  usersCache.push(newUser)
+  persistUsersToJson()
+  return newUser
+}
+
+async function verifyPasswordInJson(email: string, password: string): Promise<User | null> {
+  const user = getUserByEmailFromJson(email)
+  if (!user) {
+    return null
+  }
+
+  const isValid = await bcrypt.compare(password, user.password)
+  return isValid ? user : null
+}
+
+let usersCollectionPromise: Promise<Collection<UserDocument>> | null = null
+
+async function getUsersCollection() {
+  if (!usersCollectionPromise) {
+    usersCollectionPromise = (async () => {
+      const db = await getDb()
+      const collection = db.collection<UserDocument>('users')
+      await collection.createIndex({ email: 1 }, { unique: true })
+
+      const adminEmail = defaultUsers[0].email
+      const existingAdmin = await collection.findOne({ email: adminEmail })
+      if (!existingAdmin) {
+        await collection.insertOne({
+          _id: defaultUsers[0].id,
+          email: adminEmail,
+          name: defaultUsers[0].name,
+          password: defaultUsers[0].password,
+          role: defaultUsers[0].role,
+          createdAt: defaultUsers[0].createdAt,
+        })
+      }
+
+      return collection
+    })()
+  }
+
+  return usersCollectionPromise
+}
+
+function mapUser(doc: WithId<UserDocument>): User {
+  return {
+    id: doc._id,
+    email: doc.email,
+    name: doc.name,
+    password: doc.password,
+    role: doc.role,
+    createdAt: doc.createdAt,
+  }
+}
 
 export async function getUserByEmail(email: string): Promise<User | undefined> {
-  // Reload users from file to get latest data
-  users = loadUsers()
-  const normalizedEmail = email.toLowerCase().trim();
-  return users.find(user => user.email.toLowerCase().trim() === normalizedEmail);
+  if (!mongoEnabled) {
+    return getUserByEmailFromJson(email)
+  }
+
+  try {
+    const normalizedEmail = email.toLowerCase().trim()
+    const collection = await getUsersCollection()
+    const doc = await collection.findOne({ email: normalizedEmail })
+    return doc ? mapUser(doc) : undefined
+  } catch (error) {
+    console.error('MongoDB error fetching user by email, using JSON fallback:', error)
+    return getUserByEmailFromJson(email)
+  }
 }
 
 export async function getUserById(id: string): Promise<User | undefined> {
-  // Reload users from file to get latest data
-  users = loadUsers()
-  return users.find(user => user.id === id);
+  if (!mongoEnabled) {
+    return getUserByIdFromJson(id)
+  }
+
+  try {
+    const collection = await getUsersCollection()
+    const doc = await collection.findOne({ _id: id })
+    return doc ? mapUser(doc) : undefined
+  } catch (error) {
+    console.error('MongoDB error fetching user by id, using JSON fallback:', error)
+    return getUserByIdFromJson(id)
+  }
 }
 
-export function getAllUsers(): User[] {
-  // Reload users from file to get latest data
-  users = loadUsers()
-  return users.map(user => ({
-    ...user,
-    password: '***hidden***', // Don't expose passwords
-  }));
+export async function getAllUsers(): Promise<User[]> {
+  if (!mongoEnabled) {
+    return getAllUsersFromJson()
+  }
+
+  try {
+    const collection = await getUsersCollection()
+    const docs = await collection.find().sort({ createdAt: -1 }).toArray()
+    return docs.map((doc) => ({
+      ...mapUser(doc),
+      password: '***hidden***',
+    }))
+  } catch (error) {
+    console.error('MongoDB error fetching users, using JSON fallback:', error)
+    return getAllUsersFromJson()
+  }
 }
 
 export async function createUser(
@@ -93,54 +191,59 @@ export async function createUser(
   password: string,
   role: 'user' | 'admin' = 'user'
 ): Promise<User> {
-  // Reload users from file to get latest data
-  users = loadUsers()
-  
-  // Normalize email before checking/storing
-  const normalizedEmail = email.toLowerCase().trim();
-  
-  // Check if user already exists
-  const existingUser = await getUserByEmail(normalizedEmail);
-  if (existingUser) {
-    throw new Error('کاربری با این ایمیل قبلاً ثبت نام کرده است');
+  if (!mongoEnabled) {
+    return createUserInJson(email, name, password, role)
   }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const newUser: User = {
-    id: Date.now().toString(),
-    email: normalizedEmail, // Store normalized email
-    name: name.trim(),
-    password: hashedPassword,
-    role,
-    createdAt: new Date().toISOString(),
-  };
-  users.push(newUser);
-  saveUsers(users) // Save to file
-  return newUser;
+  try {
+    const collection = await getUsersCollection()
+    const normalizedEmail = email.toLowerCase().trim()
+
+    const existingUser = await collection.findOne({ email: normalizedEmail })
+    if (existingUser) {
+      throw new Error('کاربری با این ایمیل قبلاً ثبت نام کرده است')
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10)
+    const now = new Date().toISOString()
+    const id = `user-${Date.now()}`
+    const newDoc: UserDocument = {
+      _id: id,
+      email: normalizedEmail,
+      name: name.trim(),
+      password: hashedPassword,
+      role,
+      createdAt: now,
+    }
+
+    await collection.insertOne(newDoc)
+    return mapUser(newDoc)
+  } catch (error: any) {
+    if (error?.code === 11000) {
+      throw new Error('کاربری با این ایمیل قبلاً ثبت نام کرده است')
+    }
+    console.error('MongoDB error creating user, using JSON fallback:', error)
+    return createUserInJson(email, name, password, role)
+  }
 }
 
-export async function verifyPassword(
-  email: string,
-  password: string
-): Promise<User | null> {
-  // Reload users from file to get latest data
-  users = loadUsers()
-  
-  // Email is already normalized in getUserByEmail, but normalize here too for safety
-  const normalizedEmail = email.toLowerCase().trim();
-  const user = await getUserByEmail(normalizedEmail);
+export async function verifyPassword(email: string, password: string): Promise<User | null> {
+  if (!mongoEnabled) {
+    return verifyPasswordInJson(email.toLowerCase().trim(), password)
+  }
+
+  const normalizedEmail = email.toLowerCase().trim()
+  const user = await getUserByEmail(normalizedEmail)
+
   if (!user) {
-    console.log('User not found:', normalizedEmail);
-    console.log('Available users:', users.map(u => u.email));
-    return null;
+    return null
   }
 
-  console.log('User found, comparing password...');
-  const isValid = await bcrypt.compare(password, user.password);
-  console.log('Password comparison result:', isValid);
+  const isValid = await bcrypt.compare(password, user.password)
   if (!isValid) {
-    return null;
+    return null
   }
 
-  return user;
+  return user
 }
+
