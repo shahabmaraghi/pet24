@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
 import { isDataUrl } from '@/lib/images'
-import { iranLocations } from '../../data/iran-locations'
+import { iranlocations } from '../../data/iran-locations'
 
 interface Doctor {
   id: string
@@ -66,7 +66,7 @@ export default function DoctorsPage() {
   }
 
   const provinces = useMemo(
-    () => iranLocations.map((location) => location.province),
+    () => iranlocations.map((location) => location.province),
     []
   )
 
@@ -74,7 +74,7 @@ export default function DoctorsPage() {
     if (!selectedProvince) {
       return []
     }
-    const provinceData = iranLocations.find(
+    const provinceData = iranlocations.find(
       (location) => location.province === selectedProvince
     )
     return provinceData ? provinceData.cities : []

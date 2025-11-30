@@ -4,7 +4,7 @@ import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } fro
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useDropzone, FileRejection } from 'react-dropzone'
-import { iranLocations } from '../../../data/iran-locations'
+import { iranlocations } from '../../../data/iran-locations'
 import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_SIZE_BYTES, fileToBase64, isDataUrl } from '@/lib/images'
 import Image from 'next/image'
 
@@ -98,7 +98,7 @@ export default function AdminDoctorsPage() {
     if (!form.province) {
       return []
     }
-    const provinceData = iranLocations.find(
+    const provinceData = iranlocations.find(
       (location) => location.province === form.province
     )
     return provinceData ? provinceData.cities : []
@@ -353,7 +353,7 @@ export default function AdminDoctorsPage() {
                   <option value="" disabled>
                     انتخاب استان
                   </option>
-                  {iranLocations.map((location) => (
+                  {iranlocations.map((location) => (
                     <option key={location.province} value={location.province}>
                       {location.province}
                     </option>
