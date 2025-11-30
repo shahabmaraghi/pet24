@@ -1,0 +1,68 @@
+import { NextResponse } from 'next/server'
+import { getPostById, updatePost, deletePost } from '@/lib/posts'
+
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  const post = getPostById(params.id)
+  
+  if (!post) {
+    return NextResponse.json(
+      { error: 'پست یافت نشد' },
+      { status: 404 }
+    )
+  }
+  
+  return NextResponse.json(post)
+}
+
+export async function PUT(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const body = await request.json()
+    const { title, content, published, image } = body
+    
+    if (!title || !content) {
+      return NextResponse.json(
+        { error: 'عنوان و محتوا الزامی است' },
+        { status: 400 }
+      )
+    }
+    
+    const post = updatePost(params.id, title, content, published || false, image)
+    
+    if (!post) {
+      return NextResponse.json(
+        { error: 'پست یافت نشد' },
+        { status: 404 }
+      )
+    }
+    
+    return NextResponse.json(post)
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'خطا در به‌روزرسانی پست' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  const success = deletePost(params.id)
+  
+  if (!success) {
+    return NextResponse.json(
+      { error: 'پست یافت نشد' },
+      { status: 404 }
+    )
+  }
+  
+  return NextResponse.json({ message: 'پست با موفقیت حذف شد' })
+}
+
