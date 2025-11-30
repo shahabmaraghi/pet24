@@ -17,16 +17,16 @@ export interface User {
 
 type UserDocument = Omit<User, 'id'> & { _id: string }
 
-const defaultUsers: User[] = [
-  {
+    const defaultUsers: User[] = [
+      {
     id: 'admin-default',
     email: 'admin@example.com'.toLowerCase().trim(),
     name: 'مدیر سیستم',
     password: bcrypt.hashSync('admin123', 10),
     role: 'admin',
-    createdAt: new Date().toISOString(),
-  },
-]
+        createdAt: new Date().toISOString(),
+      },
+    ]
 
 const USERS_FILE = 'users.json'
 let usersCache: User[] = loadJsonFile<User[]>(USERS_FILE, defaultUsers)
@@ -194,13 +194,13 @@ export async function createUser(
   if (!mongoEnabled) {
     return createUserInJson(email, name, password, role)
   }
-
+  
   try {
     const collection = await getUsersCollection()
     const normalizedEmail = email.toLowerCase().trim()
-
+  
     const existingUser = await collection.findOne({ email: normalizedEmail })
-    if (existingUser) {
+  if (existingUser) {
       throw new Error('کاربری با این ایمیل قبلاً ثبت نام کرده است')
     }
 
@@ -210,9 +210,9 @@ export async function createUser(
     const newDoc: UserDocument = {
       _id: id,
       email: normalizedEmail,
-      name: name.trim(),
-      password: hashedPassword,
-      role,
+    name: name.trim(),
+    password: hashedPassword,
+    role,
       createdAt: now,
     }
 

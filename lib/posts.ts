@@ -32,7 +32,7 @@ function generateImageUrl(title: string): string {
       break
     }
   }
-
+  
   return `https://source.unsplash.com/800x600/?${keyword},animal`
 }
 
@@ -266,10 +266,10 @@ export async function updatePost(
   try {
     const collection = await getPostsCollection()
     const update: Partial<PostDocument> = {
-      title,
-      content,
-      published,
-      updatedAt: new Date().toISOString(),
+    title,
+    content,
+    published,
+    updatedAt: new Date().toISOString(),
     }
 
     if (image !== undefined) {

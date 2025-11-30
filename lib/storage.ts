@@ -2,10 +2,20 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const DATA_DIR = path.join(process.cwd(), 'data')
+const CAN_WRITE =
+  process.env.DATA_PERSIST === 'true' || process.env.NODE_ENV !== 'production'
 
 function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true })
+  if (!CAN_WRITE) {
+    return
+  }
+
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true })
+    }
+  } catch (error) {
+    console.warn('Unable to create data directory, continuing in read-only mode:', error)
   }
 }
 
@@ -18,7 +28,9 @@ export function loadJsonFile<T>(filename: string, fallback: T): T {
   const filePath = getDataFilePath(filename)
 
   if (!fs.existsSync(filePath)) {
-    saveJsonFile(filename, fallback)
+    if (CAN_WRITE) {
+      saveJsonFile(filename, fallback)
+    }
     return JSON.parse(JSON.stringify(fallback))
   }
 
@@ -32,6 +44,10 @@ export function loadJsonFile<T>(filename: string, fallback: T): T {
 }
 
 export function saveJsonFile<T>(filename: string, data: T) {
+  if (!CAN_WRITE) {
+    return
+  }
+
   const filePath = getDataFilePath(filename)
   try {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
