@@ -276,17 +276,17 @@ export async function updatePost(
       update.image = image
     }
 
-    const result = await collection.findOneAndUpdate(
+    const updatedDoc = await collection.findOneAndUpdate(
       { _id: id },
       { $set: update },
       { returnDocument: 'after' }
     )
 
-    if (!result.value) {
+    if (!updatedDoc) {
       return null
     }
 
-    return mapPost(result.value)
+    return mapPost(updatedDoc)
   } catch (error) {
     console.error('MongoDB error updating post, using JSON fallback:', error)
     return updatePostInJson(id, title, content, published, image)

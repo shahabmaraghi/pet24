@@ -342,13 +342,13 @@ export async function updateProduct(
       Object.entries(payload).filter(([, value]) => value !== undefined)
     ) as Partial<ProductInput>
 
-    const result = await collection.findOneAndUpdate(
+    const updatedDoc = await collection.findOneAndUpdate(
       { _id: id },
       { $set: { ...sanitizedPayload, updatedAt: new Date().toISOString() } },
       { returnDocument: 'after' }
     )
 
-    return result.value ? mapProduct(result.value) : null
+    return updatedDoc ? mapProduct(updatedDoc) : null
   } catch (error) {
     console.error('MongoDB error updating product, using JSON fallback:', error)
     return updateProductInJson(id, payload)

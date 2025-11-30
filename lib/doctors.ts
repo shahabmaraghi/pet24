@@ -377,13 +377,13 @@ export async function updateDoctor(
       updatedAt: new Date().toISOString(),
     }
 
-    const result = await collection.findOneAndUpdate(
+    const updatedDoc = await collection.findOneAndUpdate(
       { _id: id },
       { $set: update },
       { returnDocument: 'after' }
     )
 
-    return result.value ? mapDoctor(result.value) : null
+    return updatedDoc ? mapDoctor(updatedDoc) : null
   } catch (error) {
     console.error('MongoDB error updating doctor, using JSON fallback:', error)
     return updateDoctorInJson(id, payload)

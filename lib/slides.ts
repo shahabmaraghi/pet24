@@ -250,13 +250,13 @@ export async function updateSlide(id: string, input: Partial<SlideInput>): Promi
       updatedAt: new Date().toISOString(),
     }
 
-    const result = await collection.findOneAndUpdate(
+    const updatedDoc = await collection.findOneAndUpdate(
       { _id: id },
       { $set: updateDoc },
       { returnDocument: 'after' }
     )
 
-    return result.value ? mapSlide(result.value) : null
+    return updatedDoc ? mapSlide(updatedDoc) : null
   } catch (error) {
     console.error('MongoDB error updating slide, using JSON fallback:', error)
     return updateSlideInJson(id, input)
